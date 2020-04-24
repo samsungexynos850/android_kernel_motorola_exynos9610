@@ -2,8 +2,6 @@
 #ifndef DEBUG_SNAPSHOT_LOG_H
 #define DEBUG_SNAPSHOT_LOG_H
 
-#include <generated/autoconf.h>
-
 #ifdef CONFIG_DEBUG_SNAPSHOT_BINDER
 #include <linux/debug-snapshot-binder.h>
 #endif
@@ -13,11 +11,10 @@
 #define TASK_COMM_LEN 16
 #define NR_CPUS 8
 #undef CONFIG_DEBUG_SNAPSHOT_LINUX_BUILD
-#include <stdio.h>
-#include <stdlib.h>
 
 #else // DSS_ANALYZER
 
+#include <generated/autoconf.h>
 #include <linux/clk-provider.h>
 #include <linux/debug-snapshot.h>
 #include <linux/debug-snapshot-helper.h>
