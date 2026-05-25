@@ -82,7 +82,7 @@ static int hpa_killer(void)
 		if (!p)
 			continue;
 
-		if (task_lmk_waiting(p)) {
+		if (task_lmk_waiting(p) && p->mm) {
 			task_unlock(p);
 
 			if (time_before_eq(jiffies, hpa_deathpending_timeout)) {
