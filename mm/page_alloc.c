@@ -7644,8 +7644,7 @@ static unsigned long pfn_max_align_up(unsigned long pfn)
 
 /* [start, end) must belong to a single zone. */
 static int __alloc_contig_migrate_range(struct compact_control *cc,
-					unsigned long start, unsigned long end,
-					bool drain)
+					unsigned long start, unsigned long end)
 {
 	/* This function is based on compact_zone() from compaction.c. */
 	unsigned long nr_reclaimed;
@@ -7653,8 +7652,7 @@ static int __alloc_contig_migrate_range(struct compact_control *cc,
 	unsigned int tries = 0;
 	int ret = 0;
 
-	if (drain)
-		migrate_prep();
+	migrate_prep();
 
 	while (pfn < end || !list_empty(&cc->migratepages)) {
 		if (fatal_signal_pending(current)) {
@@ -7710,8 +7708,8 @@ static int __alloc_contig_migrate_range(struct compact_control *cc,
  * pages which PFN is in [start, end) are allocated for the caller and
  * need to be freed with free_contig_range().
  */
-int __alloc_contig_range(unsigned long start, unsigned long end,
-			 unsigned migratetype, gfp_t gfp_mask, bool drain)
+int alloc_contig_range(unsigned long start, unsigned long end,
+		       unsigned migratetype, gfp_t gfp_mask)
 {
 	unsigned long outer_start, outer_end;
 	unsigned int order;
@@ -7767,7 +7765,7 @@ int __alloc_contig_range(unsigned long start, unsigned long end,
 	 * allocated.  So, if we fall through be sure to clear ret so that
 	 * -EBUSY is not accidentally used or returned to caller.
 	 */
-	ret = __alloc_contig_migrate_range(&cc, start, end, drain);
+	ret = __alloc_contig_migrate_range(&cc, start, end);
 	if (ret && ret != -EBUSY)
 		goto done;
 	ret =0;
@@ -7789,41 +7787,38 @@ int __alloc_contig_range(unsigned long start, unsigned long end,
 	 * isolated thus they won't get removed from buddy.
 	 */
 
+	lru_add_drain_all();
+	drain_all_pages(cc.zone);
+
 	order = 0;
 	outer_start = start;
-
-	if (drain) {
-		lru_add_drain_all();
-		drain_all_pages(cc.zone);
-
-		while (!PageBuddy(pfn_to_page(outer_start))) {
-			if (++order >= MAX_ORDER) {
-				outer_start = start;
-				break;
-			}
-			outer_start &= ~0UL << order;
+	while (!PageBuddy(pfn_to_page(outer_start))) {
+		if (++order >= MAX_ORDER) {
+			outer_start = start;
+			break;
 		}
+		outer_start &= ~0UL << order;
+	}
 
-		if (outer_start != start) {
-			order = page_order(pfn_to_page(outer_start));
+	if (outer_start != start) {
+		order = page_order(pfn_to_page(outer_start));
 
-			/*
-			 * outer_start page could be small order buddy page and
-			 * it doesn't include start page. Adjust outer_start
-			 * in this case to report failed page properly
-			 * on tracepoint in test_pages_isolated()
-			 */
-			if (outer_start + (1UL << order) <= start)
-				outer_start = start;
-		}
+		/*
+		 * outer_start page could be small order buddy page and
+		 * it doesn't include start page. Adjust outer_start
+		 * in this case to report failed page properly
+		 * on tracepoint in test_pages_isolated()
+		 */
+		if (outer_start + (1UL << order) <= start)
+			outer_start = start;
+	}
 
-		/* Make sure the range is really isolated. */
-		if (test_pages_isolated(outer_start, end, false)) {
-			pr_info_ratelimited("%s: [%lx, %lx) PFNs busy\n",
-				__func__, outer_start, end);
-			ret = -EBUSY;
-			goto done;
-		}
+	/* Make sure the range is really isolated. */
+	if (test_pages_isolated(outer_start, end, false)) {
+		pr_info_ratelimited("%s: [%lx, %lx) PFNs busy\n",
+			__func__, outer_start, end);
+		ret = -EBUSY;
+		goto done;
 	}
 
 	/* Grab isolated pages from freelists. */
@@ -7843,18 +7838,6 @@ done:
 	undo_isolate_page_range(pfn_max_align_down(start),
 				pfn_max_align_up(end), migratetype);
 	return ret;
-}
-
-int alloc_contig_range(unsigned long start, unsigned long end,
-		       unsigned migratetype, gfp_t gfp_mask)
-{
-	return __alloc_contig_range(start, end, migratetype, gfp_mask, true);
-}
-
-int alloc_contig_range_fast(unsigned long start, unsigned long end,
-			    unsigned migratetype)
-{
-	return __alloc_contig_range(start, end, migratetype, GFP_KERNEL, false);
 }
 
 void free_contig_range(unsigned long pfn, unsigned nr_pages)
