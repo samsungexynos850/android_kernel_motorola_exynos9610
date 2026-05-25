@@ -27,8 +27,6 @@
 #include <linux/vmalloc.h>
 #include <linux/device.h>
 #include <linux/oom.h>
-#include <linux/sched/task.h>
-#include <linux/sched/mm.h>
 
 #include "internal.h"
 
@@ -38,91 +36,96 @@ static unsigned long start_pfn, end_pfn;
 static unsigned long cached_scan_pfn;
 
 #define HPA_MIN_OOMADJ	100
+static unsigned long hpa_deathpending_timeout;
 
-static bool oom_unkillable_task(struct task_struct *p)
+static int test_task_flag(struct task_struct *p, int flag)
 {
-	if (is_global_init(p))
-		return true;
-	if (p->flags & PF_KTHREAD)
-		return true;
-	return false;
-}
+	struct task_struct *t = p;
 
-static bool oom_skip_task(struct task_struct *p, int selected_adj)
-{
-	if (same_thread_group(p, current))
-		return true;
-	if (p->signal->oom_score_adj <= HPA_MIN_OOMADJ)
-		return true;
-	if ((p->signal->oom_score_adj < selected_adj) &&
-	    (selected_adj <= OOM_SCORE_ADJ_MAX))
-		return true;
-	if (test_bit(MMF_OOM_SKIP, &p->mm->flags))
-		return true;
-	if (in_vfork(p))
-		return true;
-	return false;
+	do {
+		task_lock(t);
+		if (test_tsk_thread_flag(t, flag)) {
+			task_unlock(t);
+			return 1;
+		}
+		task_unlock(t);
+	} while_each_thread(p, t);
+
+	return 0;
 }
 
 static int hpa_killer(void)
 {
-	struct task_struct *tsk, *p;
+	struct task_struct *tsk;
 	struct task_struct *selected = NULL;
-	unsigned long selected_tasksize = 0;
-	int selected_adj = OOM_SCORE_ADJ_MAX + 1;
+	unsigned long rem = 0;
+	int tasksize;
+	int selected_tasksize = 0;
+	short selected_oom_score_adj = HPA_MIN_OOMADJ;
+	int ret = 0;
 
 	rcu_read_lock();
 	for_each_process(tsk) {
-		int tasksize;
-		int current_adj;
+		struct task_struct *p;
+		short oom_score_adj;
 
-		if (oom_unkillable_task(tsk))
+		if (tsk->flags & PF_KTHREAD)
+			continue;
+
+		if (same_thread_group(tsk, current))
+			continue;
+
+		if (test_task_flag(tsk, TIF_MEMALLOC))
 			continue;
 
 		p = find_lock_task_mm(tsk);
 		if (!p)
 			continue;
 
-		if (!oom_skip_task(p, selected_adj)) {
+		if (task_lmk_waiting(p)) {
 			task_unlock(p);
+
+			if (time_before_eq(jiffies, hpa_deathpending_timeout)) {
+				rcu_read_unlock();
+				return ret;
+			}
+
 			continue;
 		}
-
+		oom_score_adj = p->signal->oom_score_adj;
 		tasksize = get_mm_rss(p->mm);
-		tasksize += get_mm_counter(p->mm, MM_SWAPENTS);
-		tasksize += atomic_long_read(&p->mm->nr_ptes);
-		tasksize += mm_nr_pmds(p->mm);
-		current_adj = p->signal->oom_score_adj;
-
 		task_unlock(p);
-
-		if (selected &&
-		    (current_adj == selected_adj) &&
-		    (tasksize <= selected_tasksize))
+		if (tasksize <= 0 || oom_score_adj <= HPA_MIN_OOMADJ)
 			continue;
 
-		put_task_struct(selected);
+		if (selected) {
+			if (oom_score_adj < selected_oom_score_adj)
+				continue;
+			if (oom_score_adj == selected_oom_score_adj &&
+			    tasksize <= selected_tasksize)
+				continue;
+		}
 		selected = p;
 		selected_tasksize = tasksize;
-		selected_adj = current_adj;
-		get_task_struct(selected);
+		selected_oom_score_adj = oom_score_adj;
+	}
+
+	if (selected) {
+		pr_info("HPA: Killing '%s' (%d), adj %hd freed %ldkB\n",
+				selected->comm, selected->pid,
+				selected_oom_score_adj,
+				selected_tasksize * (long)(PAGE_SIZE / 1024));
+		hpa_deathpending_timeout = jiffies + HZ;
+		task_set_lmk_waiting(selected);
+		send_sig(SIGKILL, selected, 0);
+		rem += selected_tasksize;
+	} else {
+		pr_info("HPA: no killable task\n");
+		ret = -ESRCH;
 	}
 	rcu_read_unlock();
 
-	if (!selected) {
-		pr_info("HPA: no killable task\n");
-		return -ESRCH;
-	}
-
-	pr_info("HPA: Killing '%s' (%d), adj %hd to free %lukB\n",
-		selected->comm, task_pid_nr(selected), selected_adj,
-		selected_tasksize * (PAGE_SIZE / SZ_1K));
-
-	do_send_sig_info(SIGKILL, SEND_SIG_FORCED, selected, true);
-
-	put_task_struct(selected);
-
-	return 0;
+	return ret;
 }
 
 static bool is_movable_chunk(unsigned long pfn, unsigned int order)
