@@ -72,9 +72,6 @@ static int hpa_killer(void)
 		if (tsk->flags & PF_KTHREAD)
 			continue;
 
-		if (same_thread_group(tsk, current))
-			continue;
-
 		if (test_task_flag(tsk, TIF_MEMALLOC))
 			continue;
 
@@ -82,22 +79,19 @@ static int hpa_killer(void)
 		if (!p)
 			continue;
 
-		if (task_lmk_waiting(p) && p->mm) {
+		if (task_lmk_waiting(p) && p->mm &&
+		    time_before_eq(jiffies, hpa_deathpending_timeout)) {
 			task_unlock(p);
-
-			if (time_before_eq(jiffies, hpa_deathpending_timeout)) {
-				rcu_read_unlock();
-				return ret;
-			}
-
-			continue;
+			rcu_read_unlock();
+			return ret;
 		}
 		oom_score_adj = p->signal->oom_score_adj;
 		tasksize = get_mm_rss(p->mm);
 		task_unlock(p);
 		if (tasksize <= 0 || oom_score_adj <= HPA_MIN_OOMADJ)
 			continue;
-
+		if (same_thread_group(p, current))
+			continue;
 		if (selected) {
 			if (oom_score_adj < selected_oom_score_adj)
 				continue;
