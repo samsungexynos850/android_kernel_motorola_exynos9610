@@ -201,7 +201,6 @@ static int __init init_mmi_ram_info(void)
 			vname, tname, smem_ddr_info->ramsize,
 			smem_ddr_info->mr5, smem_ddr_info->mr6,
 			smem_ddr_info->mr7, smem_ddr_info->mr8);
-		pstore_annotate(apanic_annotation);
 	}
 	else {
 		/* complain, but do not fail if SMEM was not allocated */

@@ -30,43 +30,31 @@ struct mmi_soc_bin {
 static struct mmi_soc_bin mmi_soc_bin_info;
 static DEFINE_SPINLOCK(mmi_soc_bin_lock);
 
-static inline void mmi_panic_annotate(const char *str)
-{
-	pstore_annotate(str);
-}
-
 static void __init mmi_soc_annotate_socinfo(void)
 {
 	char socinfo[32];
 
 	snprintf(socinfo, sizeof(socinfo), "socinfo: id=%u, ",
 			socinfo_get_id());
-	mmi_panic_annotate(socinfo);
 
 	snprintf(socinfo, sizeof(socinfo), "ver=%u.%u, ",
 			SOCINFO_VERSION_MAJOR(socinfo_get_version()),
 			SOCINFO_VERSION_MINOR(socinfo_get_version()));
-	mmi_panic_annotate(socinfo);
 
 	snprintf(socinfo, sizeof(socinfo), "raw_id=%u, ",
 			socinfo_get_raw_id());
-	mmi_panic_annotate(socinfo);
 
 	snprintf(socinfo, sizeof(socinfo), "raw_ver=%u, ",
 			socinfo_get_raw_version());
-	mmi_panic_annotate(socinfo);
 
 	snprintf(socinfo, sizeof(socinfo), "hw_plat=%u, ",
 			socinfo_get_platform_type());
-	mmi_panic_annotate(socinfo);
 
 	snprintf(socinfo, sizeof(socinfo), "hw_plat_ver=%u, ",
 			socinfo_get_platform_version());
-	mmi_panic_annotate(socinfo);
 
 	snprintf(socinfo, sizeof(socinfo), "hw_plat_subtype=%u\n",
 			socinfo_get_platform_subtype());
-	mmi_panic_annotate(socinfo);
 }
 
 static ssize_t mmi_acpu_proc_read(struct file *file, char __user *buf,
@@ -114,11 +102,9 @@ static void __init mmi_soc_acpu_bin_export(void)
 	}
 	spin_unlock_irqrestore(&mmi_soc_bin_lock, flags);
 
-	mmi_panic_annotate("ACPU: ");
 	if (mmi_soc_bin_info.speed != MMI_SOC_BIN_INVAL) {
 		snprintf(acpu, sizeof(acpu), "Speed bin %d ",
 				mmi_soc_bin_info.speed);
-		mmi_panic_annotate(acpu);
 	}
 	if (mmi_soc_bin_info.pvs != MMI_SOC_BIN_INVAL) {
 		proc = proc_create_data("cpu/soc_acpu_pvs",
@@ -130,14 +116,11 @@ static void __init mmi_soc_acpu_bin_export(void)
 			proc_set_size(proc, 1);
 		snprintf(acpu, sizeof(acpu), "PVS bin %d ",
 				mmi_soc_bin_info.pvs);
-		mmi_panic_annotate(acpu);
 	}
 	if (mmi_soc_bin_info.ver != MMI_SOC_BIN_INVAL) {
 		snprintf(acpu, sizeof(acpu), "PVS version %d ",
 				mmi_soc_bin_info.ver);
-		mmi_panic_annotate(acpu);
 	}
-	mmi_panic_annotate("\n");
 }
 
 static int __init init_mmi_soc_info(void)

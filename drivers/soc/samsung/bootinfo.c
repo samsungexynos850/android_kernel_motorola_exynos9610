@@ -73,13 +73,6 @@ EXPORT_SYMBOL(system_serial_high);
 			} \
 		} while (0)
 
-#define EMIT_BOOTINFO_LASTKMSG(buf, strname, fmt, name) \
-		do { \
-			snprintf(buf, sizeof(buf), strname ": " fmt "\n", \
-					bi_##name()); \
-			pstore_annotate(buf); \
-		} while (0)
-
 /*-------------------------------------------------------------------------*/
 
 /*
@@ -338,25 +331,11 @@ EXPORT_SYMBOL(bi_bootmode);
 static void bootinfo_lastkmsg_annotate_bl(struct bl_build_sig *bl)
 {
 	int i;
-	char buf[BOOTREASON_MAX_LEN];
 	for (i = 0; i < bl_build_sig_count; i++) {
 		bl[i].item[MAX_BLD_SIG_ITEM - 1] = 0;
 		bl[i].value[MAX_BLD_SIG_VALUE - 1] = 0;
-		pstore_annotate(bl[i].item);
-		pstore_annotate("=");
-		pstore_annotate(bl[i].value);
-		pstore_annotate("\n");
 	}
 
-	EMIT_BOOTINFO_LASTKMSG(buf, "MBM_VERSION", "0x%08x", mbm_version);
-	pstore_annotate(linux_banner);
-	EMIT_BOOTINFO_LASTKMSG(buf, "SERIAL", "0x%llx", serial);
-	EMIT_BOOTINFO_LASTKMSG(buf, "HW_REV", "0x%04x", hwrev);
-	EMIT_BOOTINFO_LASTKMSG(buf, "BOOT_SEQ", "0x%08x", boot_seq);
-	persistent_ram_annotation_append("POWERUPREASON: 0x%08x\n",
-						bi_powerup_reason());
-	persistent_ram_annotation_append("\nBoot info:\n");
-	persistent_ram_annotation_append("Last boot reason: %s\n", bootreason);
 }
 
 /* get_bootinfo fills in the /proc/bootinfo information.
