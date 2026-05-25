@@ -101,9 +101,7 @@ static int hpa_killer(void)
 		    (tasksize <= selected_tasksize))
 			continue;
 
-		if (selected)
-			put_task_struct(selected);
-
+		put_task_struct(selected);
 		selected = p;
 		selected_tasksize = tasksize;
 		selected_adj = current_adj;
