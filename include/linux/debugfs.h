@@ -23,6 +23,7 @@
 
 struct device;
 struct file_operations;
+struct srcu_struct;
 
 struct debugfs_blob_wrapper {
 	void *data;
@@ -41,6 +42,8 @@ struct debugfs_regset32 {
 };
 
 extern struct dentry *arch_debugfs_dir;
+
+extern struct srcu_struct debugfs_srcu;
 
 #define DEFINE_DEBUGFS_ATTRIBUTE(__fops, __get, __set, __fmt)		\
 static int __fops ## _open(struct inode *inode, struct file *file)	\
@@ -87,6 +90,11 @@ struct dentry *debugfs_create_automount(const char *name,
 
 void debugfs_remove(struct dentry *dentry);
 void debugfs_remove_recursive(struct dentry *dentry);
+
+int debugfs_use_file_start(const struct dentry *dentry, int *srcu_idx)
+	__acquires(&debugfs_srcu);
+
+void debugfs_use_file_finish(int srcu_idx) __releases(&debugfs_srcu);
 
 const struct file_operations *debugfs_real_fops(const struct file *filp);
 
@@ -218,6 +226,17 @@ static inline void debugfs_remove(struct dentry *dentry)
 { }
 
 static inline void debugfs_remove_recursive(struct dentry *dentry)
+{ }
+
+static inline int debugfs_use_file_start(const struct dentry *dentry,
+					int *srcu_idx)
+	__acquires(&debugfs_srcu)
+{
+	return 0;
+}
+
+static inline void debugfs_use_file_finish(int srcu_idx)
+	__releases(&debugfs_srcu)
 { }
 
 static inline int debugfs_file_get(struct dentry *dentry)
