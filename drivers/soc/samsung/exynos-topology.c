@@ -304,11 +304,7 @@ static int cpu_flags(void)
 	return topology_cpu_flags();
 }
 
-#ifdef CONFIG_SIMPLIFIED_ENERGY_MODEL
-#define use_simplified	1
-#else
 #define use_simplified	0
-#endif
 
 static inline
 const struct sched_group_energy * const cpu_core_energy(int cpu)

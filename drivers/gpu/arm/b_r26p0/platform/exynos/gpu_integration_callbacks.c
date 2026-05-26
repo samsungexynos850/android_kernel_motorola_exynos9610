@@ -30,7 +30,6 @@
 #endif
 
 #if defined(CONFIG_SCHED_EMS)
-#include <linux/ems.h>
 #if defined(CONFIG_SCHED_EMS_TUNE)
 static struct emstune_mode_request emstune_req;
 #else
@@ -165,7 +164,7 @@ void gpu_destroy_context(void *ctx)
 
 	mutex_unlock(&platform->gpu_vk_boost_lock);
 #endif
-#ifdef CONFIG_MALI_SEC_CL_BOOST
+#if defined(CONFIG_MALI_SEC_CL_BOOST) && defined(CONFIG_SCHED_EMS_TUNE)
     platform->cl_boost_disable = false;
 #endif
 #endif /* MALI_SEC_PROBE_TEST */

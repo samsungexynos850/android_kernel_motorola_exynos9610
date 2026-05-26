@@ -68,7 +68,6 @@ struct exynos_cpufreq_domain {
 	struct notifier_block		pm_qos_max_notifier;
 
 	/* for sysfs */
-	int				user_boost;
 	unsigned int			user_default_qos;
 
 	/* freq boost */

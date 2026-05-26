@@ -18,7 +18,6 @@
 #include <linux/rcupdate_wait.h>
 
 #include <linux/blkdev.h>
-#include <linux/cpufreq_times.h>
 #include <linux/kcov.h>
 #include <linux/kprobes.h>
 #include <linux/mmu_context.h>
@@ -29,8 +28,6 @@
 #include <linux/scs.h>
 #include <linux/security.h>
 #include <linux/syscalls.h>
-#include <linux/debug-snapshot.h>
-#include <linux/ems.h>
 
 #include <asm/switch_to.h>
 #include <asm/tlb.h>
@@ -2247,10 +2244,6 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 #endif
 
 	INIT_LIST_HEAD(&p->se.group_node);
-#ifdef CONFIG_SCHED_EMS
-	rcu_assign_pointer(p->band, NULL);
-	INIT_LIST_HEAD(&p->band_members);
-#endif
 	walt_init_new_task_load(p);
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
@@ -2464,7 +2457,6 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 	}
 
 	init_entity_runnable_average(&p->se);
-	init_rt_entity_runnable_average(&p->rt);
 
 	/*
 	 * The child is not yet in the pid-hash so no cgroup attach races,
@@ -2529,8 +2521,6 @@ void wake_up_new_task(struct task_struct *p)
 	struct rq *rq;
 
 	raw_spin_lock_irqsave(&p->pi_lock, rf.flags);
-
-	newbie_join_band(p);
 
 	walt_init_new_task_load(p);
 
@@ -3126,8 +3116,6 @@ void scheduler_tick(void)
 	trigger_load_balance(rq);
 #endif
 	rq_last_tick_reset(rq);
-
-	update_band(curr, -1);
 }
 
 #ifdef CONFIG_NO_HZ_FULL
@@ -3479,7 +3467,6 @@ static void __sched notrace __schedule(bool preempt)
 		rq_unlock_irq(rq, &rf);
 	}
 
-	dbg_snapshot_task(smp_processor_id(), rq->curr);
 	balance_callback(rq);
 }
 
@@ -3998,7 +3985,7 @@ int idle_cpu(int cpu)
 	if (rq->curr != rq->idle)
 		return 0;
 
-	if (rq->nr_running == 1)
+	if (rq->nr_running)
 		return 0;
 
 #ifdef CONFIG_SMP
@@ -6037,8 +6024,6 @@ void __init sched_init(void)
 
 	set_load_weight(&init_task);
 
-	alloc_bands();
-
 	/*
 	 * The boot idle thread does lazy MMU switching as well:
 	 */
@@ -6325,7 +6310,7 @@ static void sched_change_group(struct task_struct *tsk, int type)
 	tg = autogroup_task_group(tsk, tg);
 	tsk->sched_task_group = tg;
 
-#if defined(CONFIG_FAIR_GROUP_SCHED) || defined(CONFIG_RT_GROUP_SCHED)
+#ifdef CONFIG_FAIR_GROUP_SCHED
 	if (tsk->sched_class->task_change_group)
 		tsk->sched_class->task_change_group(tsk, type);
 	else
@@ -6868,21 +6853,4 @@ const u32 sched_prio_to_wmult[40] = {
  /*   5 */  12820798,  15790321,  19976592,  24970740,  31350126,
  /*  10 */  39045157,  49367440,  61356676,  76695844,  95443717,
  /*  15 */ 119304647, 148102320, 186737708, 238609294, 286331153,
-};
-
-/*
- * RT Extension for 'prio_to_weight'
- */
-const int rtprio_to_weight[51] = {
- /* 0 */     17222521, 15500269, 13950242, 12555218, 11299696,
- /* 10 */    10169726,  9152754,  8237478,  7413730,  6672357,
- /* 20 */     6005122,  5404609,  4864149,  4377734,  3939960,
- /* 30 */     3545964,  3191368,  2872231,  2585008,  2326507,
- /* 40 */     2093856,  1884471,  1696024,  1526421,  1373779,
- /* 50 */     1236401,  1112761,  1001485,   901337,   811203,
- /* 60 */      730083,   657074,   591367,   532230,   479007,
- /* 70 */      431106,   387996,   349196,   314277,   282849,
- /* 80 */      254564,   229108,   206197,   185577,   167019,
- /* 90 */      150318,   135286,   121757,   109581,    98623,
- /* 100 for Fair class */				88761,
 };

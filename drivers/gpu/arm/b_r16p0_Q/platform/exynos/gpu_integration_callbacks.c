@@ -30,7 +30,6 @@
 #endif
 
 #if defined(CONFIG_SCHED_EMS)
-#include <linux/ems.h>
 static struct gb_qos_request gb_req = {
 	.name = "ems_boost",
 };
